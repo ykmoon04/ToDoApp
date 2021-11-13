@@ -43,12 +43,13 @@ app.post('/add', (req, res) => {
 
       db.collection('post').insertOne(
         { _id: total + 1, title: req.body.title, date: req.body.detail },
-        (err, res) => {
+        (err, result) => {
           console.log('save success');
           db.collection('counter').updateOne(
             { name: 'number of post' },
             { $inc: { totalPost: 1 } }
           );
+          res.redirect('/list');
         }
       );
     }
@@ -109,8 +110,91 @@ app.put('/edit', (req, res) => {
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const session = require('express-session');
-app.use(
-  session({ secret: 'password', resave: true, saveUninitialized: false })
+// app.use = 미들웨어
+// 요청 - 응답 중간에 실행되는 코드
+app.use(session({ secret: 'mycode', resave: true, saveUninitialized: false }));
+app.use(passport.initialize());
+app.use(passport.session());
+
+app.get('/login', (req, res) => {
+  res.render('login.ejs');
+});
+
+app.post(
+  '/login',
+  passport.authenticate('local', {
+    failureRedirect: '/fail',
+  }),
+  (req, res) => {
+    res.redirect('/');
+  }
 );
-app.use(passport.initialize);
-app.use(passport.session);
+
+app.get('/fail', (req, res) => {
+  alert('login fail');
+  res.redirect('/');
+});
+
+app.get('/mypage', isLogin, (req, res) => {
+  console.log(req.user);
+  res.render('mypage.ejs', { user: req.user });
+});
+
+// 로그인 했는지 검사하는 미들웨어
+function isLogin(req, res, next) {
+  if (req.user) {
+    // req.user가 있으면 다음으로 통과
+    // 로그인 후 세션이 있으면 req.user가 항상 있음
+    next();
+  } else {
+    res.send('로그인 안함');
+  }
+}
+
+// 인증 방식
+passport.use(
+  new LocalStrategy(
+    {
+      usernameField: 'id',
+      passwordField: 'pw',
+      session: true,
+      passReqToCallback: false,
+    },
+    (inputId, inputPw, done) => {
+      console.log(inputId, inputPw);
+      db.collection('login').findOne({ id: inputId }, (err, result) => {
+        if (err) {
+          return done(err);
+        }
+
+        // done(서버에러, 성공시 사용자 db 데이터, 에러메시지)
+        // db에 아이디가 없으면
+        if (!result) {
+          return done(null, false, { message: '존재하지 않는 아이디' });
+        }
+
+        // 아이디 있으면 pw 비교
+        // pw 암호화 안함 -> 보안 X -> 나중에 더 공부하셈
+        if (inputPw == result.pw) {
+          return done(null, result);
+        } else {
+          return done(null, false, { message: '비번 틀림' });
+        }
+      });
+    }
+  )
+);
+
+// 검사가 끝났을 때 로그인 했다는 세션 정보를 만들어 저장해야 함
+// 유저 정보 암호화해 세션으로 저장
+// 세션 데이터를 쿠키로 보냄
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
+
+// 이 세션데이터를 가진 사람을 DB에서 찾아주세요 -> 마이페이지 같은 기능에 사용
+passport.deserializeUser((userid, done) => {
+  db.collection('login').findOne({ id: userid }, (err, result) => {
+    done(null, result);
+  });
+});
