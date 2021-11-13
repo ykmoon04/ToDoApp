@@ -107,7 +107,7 @@ app.put('/edit', (req, res) => {
 
 // 라이브러리 첨부 -> 그냥 따라 쳐라
 const passport = require('passport');
-const LocalStrategy = require('passport-local');
+const LocalStrategy = require('passport-local').Strategy;
 const session = require('express-session');
 app.use(
   session({ secret: 'password', resave: true, saveUninitialized: false })
